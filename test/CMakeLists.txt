@@ -29,8 +29,8 @@ shilmandb_add_test(btree_index_test index/btree_index_test.cpp)
 shilmandb_add_test(catalog_test catalog/catalog_test.cpp)
 
 # Parser tests
-# shilmandb_add_test(lexer_test parser/lexer_test.cpp)
-# shilmandb_add_test(parser_test parser/parser_test.cpp)
+shilmandb_add_test(lexer_test parser/lexer_test.cpp)
+shilmandb_add_test(parser_test parser/parser_test.cpp)
 
 # Planner tests
 # shilmandb_add_test(planner_test planner/planner_test.cpp)
