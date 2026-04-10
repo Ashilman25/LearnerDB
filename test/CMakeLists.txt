@@ -42,10 +42,11 @@ shilmandb_add_test(index_scan_executor_test executor/index_scan_executor_test.cp
 shilmandb_add_test(filter_executor_test executor/filter_executor_test.cpp)
 shilmandb_add_test(hash_join_executor_test executor/hash_join_executor_test.cpp)
 shilmandb_add_test(nested_loop_join_executor_test executor/nested_loop_join_executor_test.cpp)
-# shilmandb_add_test(sort_executor_test executor/sort_executor_test.cpp)
-# shilmandb_add_test(aggregate_executor_test executor/aggregate_executor_test.cpp)
-# shilmandb_add_test(projection_executor_test executor/projection_executor_test.cpp)
+shilmandb_add_test(sort_executor_test executor/sort_executor_test.cpp)
+shilmandb_add_test(aggregate_executor_test executor/aggregate_executor_test.cpp)
+shilmandb_add_test(projection_executor_test executor/projection_executor_test.cpp)
+shilmandb_add_test(limit_executor_test executor/limit_executor_test.cpp)
 
 # Integration tests
-# shilmandb_add_test(end_to_end_test integration/end_to_end_test.cpp)
+shilmandb_add_test(end_to_end_test integration/end_to_end_test.cpp)
 # shilmandb_add_test(sqlite_comparison_test integration/sqlite_comparison_test.cpp)
