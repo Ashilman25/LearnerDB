@@ -18,7 +18,7 @@ auto SplitConjuncts(std::unique_ptr<Expression> expr) -> std::vector<std::unique
         auto left_parts = SplitConjuncts(std::move(bin->left));
         auto right_parts = SplitConjuncts(std::move(bin->right));
 
-        for (auto& p : left_parts)  result.push_back(std::move(p));
+        for (auto& p : left_parts) result.push_back(std::move(p));
         for (auto& p : right_parts) result.push_back(std::move(p));
     } else {
         result.push_back(std::move(expr));
@@ -422,9 +422,16 @@ auto Planner::Plan(SelectStatement stmt) -> std::unique_ptr<PlanNode> {
             } else {
                 std::string col_name = item.alias.has_value() ? item.alias.value() : DeriveColumnName(item.expr.get());
                 auto col_type = ResolveExprType(item.expr.get(), current->output_schema);
-                
+
                 proj_columns.emplace_back(col_name, col_type);
-                proj_exprs.push_back(std::move(item.expr));
+
+                if (dynamic_cast<Aggregate*>(item.expr.get())) {
+                    auto cr = std::make_unique<ColumnRef>();
+                    cr->column_name = DeriveColumnName(item.expr.get());
+                    proj_exprs.push_back(std::move(cr));
+                } else {
+                    proj_exprs.push_back(std::move(item.expr));
+                }
             }
         }
 
