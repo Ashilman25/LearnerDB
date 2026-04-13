@@ -278,7 +278,7 @@ auto Planner::Plan(SelectStatement stmt) -> std::unique_ptr<PlanNode> {
                 auto exhaustive_order = JoinOrderOptimizer::FindBestOrder(tables, stmt.joins, stats);
                 double exhaustive_cost = JoinOrderOptimizer::EstimateCost(exhaustive_order, tables, stmt.joins, stats);
 
-                if (learned_cost <= 2.0 * exhaustive_cost) {
+                if (learned_cost <= 1.5 * exhaustive_cost) {
                     order = std::move(learned_order);
                 } else {
                     order = std::move(exhaustive_order);

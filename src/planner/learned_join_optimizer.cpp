@@ -1,16 +1,23 @@
 #ifdef SHILMANDB_HAS_LIBTORCH
 
 #include "planner/learned_join_optimizer.hpp"
+#include "common/exception.hpp"
 #include <cassert>
 
 namespace shilmandb {
 
 LearnedJoinOptimizer::LearnedJoinOptimizer(const std::string& model_path) {
-    model_ = torch::jit::load(model_path);
-    model_.eval();
+    try {
+        model_ = torch::jit::load(model_path);
+        model_.eval();
+    } catch (const std::exception& e) {
+        throw DatabaseException(
+            "Failed to load join optimizer model from '" + model_path + "': " + e.what());
+    }
 }
 
 auto LearnedJoinOptimizer::PredictJoinOrder(const std::vector<float>& features, int num_tables) -> std::vector<int> {
+    assert(features.size() == 48 && "Expected 48-dim feature vector");
     assert(num_tables > 0 && num_tables <= 6 && "PredictJoinOrder supports 1-6 tables");
 
     auto input = torch::from_blob(
