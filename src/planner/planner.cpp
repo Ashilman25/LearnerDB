@@ -2,6 +2,7 @@
 #include "planner/join_order_optimizer.hpp"
 #include "planner/index_selector.hpp"
 #include "common/exception.hpp"
+#include "types/value.hpp"
 #include <algorithm>
 #include <unordered_set>
 
@@ -173,16 +174,37 @@ auto ResolveExprType(const Expression* expr, const Schema& schema) -> TypeId {
     }
     if (const auto* agg = dynamic_cast<const Aggregate*>(expr)) {
         switch (agg->func) {
-            case Aggregate::Func::COUNT: 
+            case Aggregate::Func::COUNT:
                 return TypeId::INTEGER;
-            case Aggregate::Func::SUM:   
+            case Aggregate::Func::SUM:
                 return TypeId::DECIMAL;
-            case Aggregate::Func::AVG:   
+            case Aggregate::Func::AVG:
                 return TypeId::DECIMAL;
             case Aggregate::Func::MIN:
             case Aggregate::Func::MAX:
                 return agg->arg ? ResolveExprType(agg->arg.get(), schema) : TypeId::INTEGER;
         }
+    }
+    if (const auto* ce = dynamic_cast<const CaseExpression*>(expr)) {
+        if (ce->when_clauses.empty()) return TypeId::INTEGER;  // guarded by parser
+
+        TypeId resolved = ResolveExprType(ce->when_clauses[0].second.get(), schema);
+        for (size_t i = 1; i < ce->when_clauses.size(); ++i) {
+            auto t = ResolveExprType(ce->when_clauses[i].second.get(), schema);
+            auto merged = CommonType(resolved, t);
+
+            if (merged == TypeId::INVALID) {
+                return ResolveExprType(ce->when_clauses[0].second.get(), schema);
+            }
+            resolved = merged;
+        }
+
+        if (ce->else_clause) {
+            auto t = ResolveExprType(ce->else_clause.get(), schema);
+            auto merged = CommonType(resolved, t);
+            if (merged != TypeId::INVALID) resolved = merged;
+        }
+        return resolved;
     }
     return TypeId::INTEGER;
 }
@@ -303,7 +325,7 @@ auto Planner::Plan(SelectStatement stmt) -> std::unique_ptr<PlanNode> {
         for (size_t k = 1; k < order.size(); ++k) {
             const int new_idx = order[k];
 
-            std::unique_ptr<Expression> join_pred;
+            std::vector<std::unique_ptr<Expression>> join_preds;
             for (auto& join : stmt.joins) {
                 if (!join.on_condition) continue;
 
@@ -316,16 +338,38 @@ auto Planner::Plan(SelectStatement stmt) -> std::unique_ptr<PlanNode> {
                 });
 
                 if (refs_new && refs_joined) {
-                    join_pred = std::move(join.on_condition);
+                    join_preds.push_back(std::move(join.on_condition));
                     break;
+                }
+            }
+
+            for (auto it = residual_predicates.begin(); it != residual_predicates.end();) {
+                std::unordered_set<int> refs;
+                CollectTableIndices(it->get(), tables, table_infos, refs);
+
+                bool refs_new = refs.find(new_idx) != refs.end();
+                bool refs_joined = std::any_of(refs.begin(), refs.end(), [&](int r) {
+                    return joined_set.find(r) != joined_set.end();
+                });
+
+                bool refs_only_joined_or_new = std::all_of(refs.begin(), refs.end(), [&](int r) {
+                    return r == new_idx || joined_set.find(r) != joined_set.end();
+                });
+
+                if (refs_new && refs_joined && refs_only_joined_or_new) {
+                    join_preds.push_back(std::move(*it));
+                    it = residual_predicates.erase(it);
+                } else {
+                    ++it;
                 }
             }
 
             joined_set.insert(new_idx);
 
             auto join_schema = BuildJoinSchema(current->output_schema, scans[new_idx]->output_schema);
-
+            std::unique_ptr<Expression> join_pred = CombinePredicates(join_preds);
             std::unique_ptr<PlanNode> join_node;
+            
             if (join_pred && IsEquiJoin(join_pred.get())) {
                 join_node = std::make_unique<HashJoinPlanNode>(std::move(join_schema), std::move(join_pred));
             } else {

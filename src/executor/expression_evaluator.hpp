@@ -92,6 +92,19 @@ inline Value EvaluateExpression(const Expression* expr, const Tuple& tuple, cons
             break;
         }
 
+        case ExprType::CASE: {
+            const auto* case_expr = static_cast<const CaseExpression*>(expr);
+            for (const auto& [cond, result] : case_expr->when_clauses) {
+                if (IsTruthy(EvaluateExpression(cond.get(), tuple, schema))) {
+                    return EvaluateExpression(result.get(), tuple, schema);
+                }
+            }
+            if (case_expr->else_clause) {
+                return EvaluateExpression(case_expr->else_clause.get(), tuple, schema);
+            }
+            return Value(int32_t{0});  // zero-default (no NULL)
+        }
+
         case ExprType::AGGREGATE:
         case ExprType::STAR:
             throw DatabaseException("Cannot evaluate AGGREGATE or STAR expression in this context");
