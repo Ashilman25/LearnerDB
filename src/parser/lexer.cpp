@@ -35,6 +35,11 @@ static const std::unordered_map<std::string, TokenType> kKeywords = {
     {"MIN", TokenType::MIN},
     {"MAX", TokenType::MAX},
     {"DATE", TokenType::DATE_LITERAL},
+    {"CASE", TokenType::CASE},
+    {"WHEN", TokenType::WHEN},
+    {"THEN", TokenType::THEN},
+    {"ELSE", TokenType::ELSE},
+    {"END", TokenType::END},
 };
 
 Lexer::Lexer(const std::string& input) : input_(input) {}
