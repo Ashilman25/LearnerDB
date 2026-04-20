@@ -44,7 +44,7 @@ QUERY_TAGS = ["Q1", "Q3", "Q5", "Q6", "Q10", "Q12", "Q14", "Q19"]
 
 
 
-def build_command(binary: str, sf: str, config_name: str, data_dir: str, results_dir: str, db_file: str) -> List[str]:
+def build_command(binary: str, sf: str, config_name: str, data_dir: str, results_dir: str, db_file: str, execution_mode: str) -> List[str]:
     pool_size = POOL_SIZES[sf]
     sf_data_dir = os.path.join(data_dir, f"sf{sf}")
 
@@ -55,6 +55,7 @@ def build_command(binary: str, sf: str, config_name: str, data_dir: str, results
         "--data-dir", sf_data_dir,
         "--pool-size", str(pool_size),
         "--results-dir", results_dir,
+        "--execution-mode", execution_mode,
     ]
 
     for flag, value in CONFIGS[config_name].items():
@@ -91,20 +92,20 @@ def write_combined_latencies(records: List[Dict], output_path: str) -> None:
 
 
 
-def run_single(binary: str, sf: str, config_name: str, data_dir: str, output_dir: str) -> Tuple[bool, Union[str, List[Dict]]]:
-    temp_results = f"/tmp/shilmandb_results_{config_name}_{sf}"
-    db_file = f"/tmp/shilmandb_{config_name}_sf{sf}.db"
+def run_single(binary: str, sf: str, config_name: str, data_dir: str, output_dir: str, execution_mode: str) -> Tuple[bool, Union[str, List[Dict]]]:
+    temp_results = f"/tmp/shilmandb_results_{config_name}_{execution_mode}_{sf}"
+    db_file = f"/tmp/shilmandb_{config_name}_{execution_mode}_sf{sf}.db"
 
     # Clean up any stale files from a previous run
     if os.path.exists(temp_results):
         shutil.rmtree(temp_results)
-        
+
     if os.path.exists(db_file):
         os.remove(db_file)
 
     os.makedirs(temp_results, exist_ok=True)
 
-    cmd = build_command(binary, sf, config_name, data_dir, temp_results, db_file)
+    cmd = build_command(binary, sf, config_name, data_dir, temp_results, db_file, execution_mode)
     print(f"    Command: {' '.join(cmd)}")
 
     try:
@@ -138,7 +139,7 @@ def run_single(binary: str, sf: str, config_name: str, data_dir: str, output_dir
             print(f"    | {line}")
 
     # Copy per-query CSV results
-    config_results_dir = os.path.join(output_dir, "shilmandb_results", config_name)
+    config_results_dir = os.path.join(output_dir, "shilmandb_results", f"{config_name}_{execution_mode}")
     os.makedirs(config_results_dir, exist_ok=True)
 
     for tag in QUERY_TAGS:
@@ -234,6 +235,12 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Trigger 'bash scripts/build.sh Release ON' before running",
     )
+    parser.add_argument(
+        "--execution-mode",
+        choices=["tuple", "vectorized"],
+        default="tuple",
+        help="Execution mode passed to load_tpch --execution-mode (default: tuple)",
+    )
     return parser.parse_args()
 
 
@@ -270,6 +277,7 @@ def main() -> None:
     print(f"  Binary: {args.binary}")
     print(f"  Data dir: {args.data_dir}")
     print(f"  Output dir: {args.output_dir}")
+    print(f"  Execution mode: {args.execution_mode}")
 
     # Optional build step
     if args.build:
@@ -307,11 +315,11 @@ def main() -> None:
         for config_name in configs:
             run_num += 1
             print(f"\n{'=' * 60}")
-            print(f"  [{run_num}/{total_runs}] Config: {config_name}, SF={sf}, Pool={POOL_SIZES[sf]}")
+            print(f"  [{run_num}/{total_runs}] Config: {config_name}, Mode: {args.execution_mode}, SF={sf}, Pool={POOL_SIZES[sf]}")
             print(f"{'=' * 60}")
 
             success, result = run_single(
-                args.binary, sf, config_name, args.data_dir, args.output_dir
+                args.binary, sf, config_name, args.data_dir, args.output_dir, args.execution_mode
             )
 
             if success:
@@ -320,7 +328,7 @@ def main() -> None:
                     all_latencies.append({
                         "sf": sf,
                         "query": rec["query"],
-                        "config": config_name,
+                        "config": f"{config_name}_{args.execution_mode}",
                         "latency_ms": rec["latency_ms"],
                         "rows": rec["rows"],
                     })
